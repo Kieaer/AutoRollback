@@ -47,6 +47,10 @@ class AutoRollback : Plugin() {
                     }
                 }
             }
+
+            override fun dispose() {
+                timer.cancel()
+            }
         })
     }
 
