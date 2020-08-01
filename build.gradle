@@ -1,0 +1,29 @@
+plugins {
+    id 'java-library'
+    id 'org.jetbrains.kotlin.jvm' version '1.4.0-rc'
+    id 'com.github.johnrengelman.shadow' version '5.2.0'
+}
+
+repositories {
+    jcenter()
+    maven { url 'https://www.jitpack.io' }
+    maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'com.github.Anuken.Arc:arc-core:v104.6'
+    compileOnly 'com.github.Anuken.Mindustry:core:v104.6'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+jar {
+    enabled = false // disable original
+    dependsOn(shadowJar) // add new task
+}
+
+shadowJar {
+    archiveFileName = "${project.archivesBaseName}.jar" // remove jar classifier and version
+    minimize() // remove unused classes
+}
