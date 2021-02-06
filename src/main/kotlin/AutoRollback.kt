@@ -1,20 +1,23 @@
+
 import arc.ApplicationListener
 import arc.Core
 import arc.files.Fi
+import arc.struct.Seq
 import arc.util.CommandHandler
 import arc.util.Log
 import mindustry.Vars.*
 import mindustry.core.GameState
-import mindustry.entities.type.Player
 import mindustry.gen.Call
+import mindustry.gen.Groups
+import mindustry.gen.Player
 import mindustry.io.SaveIO
-import mindustry.plugin.Plugin
+import mindustry.mod.Plugin
 import java.util.*
 
 class AutoRollback : Plugin() {
     val timer = Timer()
     val file : Fi = saveDirectory.child("rollback.$saveExtension")
-    val voted = arc.struct.Array<String>()
+    val voted = Seq<String>()
     var isVoting = false
     var require = 0
 
@@ -30,7 +33,7 @@ class AutoRollback : Plugin() {
             var tick = 0
 
             override fun update() {
-                require = if (playerGroup.size() > 8) 6 else 2 + if (playerGroup.size() > 4) 1 else 0
+                require = if (Groups.player.size() > 8) 6 else 2 + if (Groups.player.size() > 4) 1 else 0
 
                 if(isVoting && voted.size >= require){
                     rollback()
@@ -55,41 +58,32 @@ class AutoRollback : Plugin() {
     }
 
     fun rollback(){
-        val players = arc.struct.Array<Player>()
-        for (p in playerGroup.all()) {
+        val players = Seq<Player>()
+        for (p in Groups.player) {
             players.add(p)
-            p.isDead = true
+            p.unit().kill()
         }
-        logic.reset()
-        Call.onWorldDataBegin()
-        try {
-            SaveIO.load(file)
-            logic.play()
-            for (p in players) {
-                if (p.con == null) continue
-                p.reset()
-                if (state.rules.pvp) {
-                    p.team = netServer.assignTeam(p, arc.struct.Array.ArrayIterable(players))
-                }
-                netServer.sendWorldData(p)
-            }
-        } catch (e: SaveIO.SaveException) {
-            e.printStackTrace()
-        }
-        Log.info("Map rollbacked.")
-        Thread {
+
+        Core.app.post {
+            logic.reset()
+            Call.worldDataBegin()
             try {
-                val orignal = state.rules.respawnTime
-                state.rules.respawnTime = 0f
-                Call.onSetRules(state.rules)
-                Thread.sleep(3000)
-                state.rules.respawnTime = orignal
-                Call.onSetRules(state.rules)
-            } catch (ignored: InterruptedException) {
-                Thread.currentThread().interrupt()
+                SaveIO.load(file)
+                logic.play()
+                for (p in players) {
+                    if (p.con() == null) continue
+                    p.reset()
+                    if (state.rules.pvp) {
+                        p.team(netServer.assignTeam(p, Seq.SeqIterable(players)))
+                    }
+                    netServer.sendWorldData(p)
+                }
+            } catch (e: SaveIO.SaveException) {
+                e.printStackTrace()
             }
-        }.start()
-        if (state.`is`(GameState.State.playing)) Call.sendMessage("[green]Map rollbacked.")
+            Log.info("Map rollbacked.")
+            if (state.`is`(GameState.State.playing)) Call.sendMessage("[green]Map rollbacked.")
+        }
     }
 
     fun save(){
@@ -98,12 +92,10 @@ class AutoRollback : Plugin() {
 
     override fun registerClientCommands(handler: CommandHandler) {
         handler.register("rollback", "Return the server to 5 minutes ago.") { _: Array<String>, p: Player ->
-            if(playerGroup.size() > 4) {
-                if (!isVoting) {
-                    isVoting = true
-                }
-                if (!voted.contains(p.uuid)) voted.add(p.uuid)
-                if (voted.size <= require) Call.sendMessage("Rollback vote remaining: ${voted.size}/" + if (playerGroup.size() > 8) 6 else 2 + if (playerGroup.size() > 4) 1 else 0)
+            if(Groups.player.size() > 4) {
+                if (!isVoting) isVoting = true
+                if (!voted.contains(p.uuid())) voted.add(p.uuid())
+                if (voted.size <= require) Call.sendMessage("Rollback vote remaining: ${voted.size}/" + if (Groups.player.size() > 8) 6 else 2 + if (Groups.player.size() > 4) 1 else 0)
             } else {
                 p.sendMessage("There must be at least 4 players in the rollback vote.")
             }
